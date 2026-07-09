@@ -6,11 +6,13 @@ export function SidebarContent({
   active,
   onSelect,
   criticalCount,
+  anomalyCount,
   onClose,
 }: {
   active: TabId;
   onSelect: (id: TabId) => void;
   criticalCount: number;
+  anomalyCount: number;
   onClose?: () => void;
 }) {
   return (
@@ -19,7 +21,7 @@ export function SidebarContent({
         <div className="flex items-center gap-2.5">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center text-white"
-            style={{ background: 'linear-gradient(135deg, var(--branch-701), var(--branch-707))' }}
+            style={{ background: 'linear-gradient(135deg, var(--accent), var(--branch-2))' }}
           >
             <IconSparkles className="w-5 h-5" />
           </div>
@@ -43,7 +45,8 @@ export function SidebarContent({
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = item.id === active;
-          const showBadge = item.id === 'recommendations' && criticalCount > 0;
+          const badgeCount = item.id === 'recommendations' ? criticalCount : item.id === 'alerts' ? anomalyCount : 0;
+          const showBadge = badgeCount > 0;
           return (
             <button
               key={item.id}
@@ -54,7 +57,7 @@ export function SidebarContent({
               )}
               style={
                 isActive
-                  ? { background: 'color-mix(in srgb, var(--branch-701) 12%, transparent)', color: 'var(--branch-701)' }
+                  ? { background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }
                   : { color: 'var(--text-secondary)' }
               }
             >
@@ -65,7 +68,7 @@ export function SidebarContent({
                   className="text-[11px] font-extrabold rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center text-white"
                   style={{ background: 'var(--critical)' }}
                 >
-                  {criticalCount}
+                  {badgeCount}
                 </span>
               )}
             </button>
