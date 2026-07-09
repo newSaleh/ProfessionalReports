@@ -2,10 +2,11 @@ import { useMemo, useState, type ReactNode } from 'react';
 import type { AppData } from '../../hooks/useAppData';
 import type { ModelRow } from '../../lib/types';
 import { Card } from '../common/Card';
-import { IconChevronDown, IconSearch } from '../common/Icons';
+import { IconChevronDown, IconDownload, IconSearch } from '../common/Icons';
 import { MiniBranchBar } from '../common/MiniBranchBar';
 import { fmtNum, fmtPct } from '../../lib/format';
 import { computeModelStat } from '../../lib/analytics';
+import { exportModelsExcel } from '../../lib/exportWorkbook';
 import { ModelDetailDrawer } from './ModelDetailDrawer';
 import clsx from 'clsx';
 
@@ -13,6 +14,7 @@ type SortKey = 'sold' | 'balance' | 'price' | 'sellThrough';
 
 export function Explorer({ data }: { data: AppData }) {
   const rows = data.selectedSnapshot?.rows ?? [];
+  const branches = data.selectedSnapshot?.branches ?? [];
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [sortKey, setSortKey] = useState<SortKey>('sold');
@@ -30,6 +32,7 @@ export function Explorer({ data }: { data: AppData }) {
         r.ModelCode.toLowerCase().includes(q) ||
         r.StockCode.toLowerCase().includes(q) ||
         r.SupplierName.toLowerCase().includes(q) ||
+        r.SupplierCode.toLowerCase().includes(q) ||
         r.StockGroupName.toLowerCase().includes(q)
       );
     });
@@ -43,7 +46,7 @@ export function Explorer({ data }: { data: AppData }) {
         case 'price':
           return r.UnitPrice;
         case 'sellThrough': {
-          const s = computeModelStat(r);
+          const s = computeModelStat(r, branches);
           const avail = s.totalSoldPositive + s.totalBalancePositive;
           return avail > 0 ? s.totalSoldPositive / avail : 0;
         }
@@ -51,7 +54,7 @@ export function Explorer({ data }: { data: AppData }) {
     };
     list = [...list].sort((a, b) => (val(a) - val(b)) * (sortDir === 'asc' ? 1 : -1));
     return list;
-  }, [rows, search, category, sortKey, sortDir]);
+  }, [rows, branches, search, category, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -63,13 +66,23 @@ export function Explorer({ data }: { data: AppData }) {
 
   return (
     <div className="flex flex-col gap-5 animate-in">
-      <div>
-        <h2 className="text-xl font-extrabold" style={{ color: 'var(--text-primary)' }}>
-          مستكشف الموديلات
-        </h2>
-        <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-          {filtered.length} من {rows.length} موديل — ابحث، رتّب، وافتح أي موديل لرؤية أدائه في كل فرع
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-extrabold" style={{ color: 'var(--text-primary)' }}>
+            مستكشف الموديلات
+          </h2>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+            {filtered.length} من {rows.length} موديل — ابحث، رتّب، وافتح أي موديل لرؤية أدائه في كل فرع
+          </p>
+        </div>
+        <button
+          onClick={() => exportModelsExcel(filtered, branches, data.branchNames, data.selectedSnapshot?.date ?? '')}
+          className="flex items-center gap-1.5 text-sm font-bold rounded-xl px-3.5 py-2.5 border"
+          style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+        >
+          <IconDownload className="w-4 h-4" />
+          تصدير Excel
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -118,7 +131,7 @@ export function Explorer({ data }: { data: AppData }) {
             </thead>
             <tbody>
               {filtered.map((r, i) => {
-                const stat = computeModelStat(r);
+                const stat = computeModelStat(r, branches);
                 const avail = stat.totalSoldPositive + stat.totalBalancePositive;
                 const sellThrough = avail > 0 ? stat.totalSoldPositive / avail : 0;
                 return (
@@ -142,13 +155,13 @@ export function Explorer({ data }: { data: AppData }) {
                         {r.StockGroupName}
                       </div>
                       <div className="text-[11px] truncate max-w-[160px]" style={{ color: 'var(--muted)' }}>
-                        {r.SupplierName}
+                        {r.SupplierName} · {r.SupplierCode}
                       </div>
                     </Td>
                     <Td>{fmtNum(r.UnitPrice)}</Td>
                     <Td align="start">
                       <div className="w-28">
-                        <MiniBranchBar row={r} />
+                        <MiniBranchBar row={r} branches={branches} />
                       </div>
                     </Td>
                     <Td bold>{fmtNum(Math.max(0, r.TotalQtySold))}</Td>
@@ -189,7 +202,7 @@ function Th({ children, align = 'center' }: { children: ReactNode; align?: 'cent
 
 function ThSort({ label, active, dir, onClick }: { label: string; active: boolean; dir: 'asc' | 'desc'; onClick: () => void }) {
   return (
-    <th className="px-3 py-3 font-bold whitespace-nowrap text-center cursor-pointer select-none" onClick={onClick} style={{ color: active ? 'var(--branch-701)' : 'var(--muted)' }}>
+    <th className="px-3 py-3 font-bold whitespace-nowrap text-center cursor-pointer select-none" onClick={onClick} style={{ color: active ? 'var(--accent)' : 'var(--muted)' }}>
       <span className="inline-flex items-center gap-1">
         {label}
         {active && <IconChevronDown className={clsx('w-3 h-3 transition-transform', dir === 'asc' && 'rotate-180')} />}

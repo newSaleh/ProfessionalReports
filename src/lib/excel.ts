@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { ModelRow } from './types';
+import type { BranchCode, ModelRow } from './types';
 
 const REQUIRED_COLUMNS: (keyof ModelRow)[] = [
   'SupplierCode',
@@ -36,46 +36,74 @@ export function dateFromFilename(filename: string): string | null {
   return `${y}-${mo}-${d}`;
 }
 
-export async function parseTopModelsFile(file: File): Promise<ModelRow[]> {
+/** Detect every "{code}SoldQty" / "{code}Balance" column pair — the branch codes themselves are
+ *  whatever the source system uses, never hardcoded, so this works for any company's export. */
+function detectBranchCodes(headers: string[]): BranchCode[] {
+  const codes: BranchCode[] = [];
+  const seen = new Set<string>();
+  for (const h of headers) {
+    const m = h.match(/^(.+)SoldQty$/);
+    if (!m || m[1] === 'Total') continue;
+    const code = m[1];
+    if (seen.has(code)) continue;
+    if (!headers.includes(`${code}Balance`)) continue;
+    seen.add(code);
+    codes.push(code);
+  }
+  return codes;
+}
+
+export interface ParsedSheet {
+  rows: ModelRow[];
+  branches: BranchCode[];
+}
+
+export async function parseTopModelsFile(file: File): Promise<ParsedSheet> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array' });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   if (!sheet) throw new ExcelParseError('الملف لا يحتوي على أي صفحة بيانات.');
 
+  const headerRow = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, range: 0 })[0] ?? [];
+  const headers = headerRow.map((h) => String(h ?? '').trim());
+
   const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: null });
   if (raw.length === 0) throw new ExcelParseError('الملف فارغ — لا توجد صفوف بيانات.');
 
-  const firstRowKeys = new Set(Object.keys(raw[0]));
-  const missing = REQUIRED_COLUMNS.filter((c) => !firstRowKeys.has(c));
+  const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
   if (missing.length > 0) {
     throw new ExcelParseError(
       `تنسيق الملف غير متوافق. الأعمدة الناقصة: ${missing.join('، ')}. تأكد من رفع نفس تقرير "Top Models".`,
     );
   }
 
+  const branches = detectBranchCodes(headers);
+  if (branches.length === 0) {
+    throw new ExcelParseError(
+      'لم يتم العثور على أعمدة أي فرع (مثل 701SoldQty و701Balance). تأكد أن الملف يحتوي على عمودَي كمية مباعة ورصيد لكل فرع.',
+    );
+  }
+
   const rows: ModelRow[] = raw
     .filter((r) => r.SupplierCode != null && String(r.StockCode ?? '').trim() !== '')
-    .map((r) => ({
-      SupplierCode: str(r.SupplierCode),
-      SupplierName: str(r.SupplierName),
-      StockGroupName: str(r.StockGroupName),
-      StockCode: str(r.StockCode),
-      ModelCode: str(r.ModelCode),
-      UnitPrice: num(r.UnitPrice),
-      TotalQtySold: num(r.TotalQtySold),
-      TotalBalance: num(r.TotalBalance),
-      '701SoldQty': num(r['701SoldQty']),
-      '706SoldQty': num(r['706SoldQty']),
-      '707SoldQty': num(r['707SoldQty']),
-      '711SoldQty': num(r['711SoldQty']),
-      '803SoldQty': num(r['803SoldQty']),
-      '701Balance': num(r['701Balance']),
-      '706Balance': num(r['706Balance']),
-      '707Balance': num(r['707Balance']),
-      '711Balance': num(r['711Balance']),
-      '803Balance': num(r['803Balance']),
-    }));
+    .map((r) => {
+      const branchData: ModelRow['branches'] = {};
+      for (const code of branches) {
+        branchData[code] = { sold: num(r[`${code}SoldQty`]), balance: num(r[`${code}Balance`]) };
+      }
+      return {
+        SupplierCode: str(r.SupplierCode),
+        SupplierName: str(r.SupplierName),
+        StockGroupName: str(r.StockGroupName),
+        StockCode: str(r.StockCode),
+        ModelCode: str(r.ModelCode),
+        UnitPrice: num(r.UnitPrice),
+        TotalQtySold: num(r.TotalQtySold),
+        TotalBalance: num(r.TotalBalance),
+        branches: branchData,
+      };
+    });
 
   if (rows.length === 0) throw new ExcelParseError('لم يتم العثور على صفوف بيانات صالحة في الملف.');
-  return rows;
+  return { rows, branches };
 }

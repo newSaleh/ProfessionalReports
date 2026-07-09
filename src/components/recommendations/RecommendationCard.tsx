@@ -2,22 +2,25 @@ import type { BranchCode, Recommendation } from '../../lib/types';
 import { branchName } from '../../lib/analytics';
 import { Badge } from '../common/Badge';
 import { BranchTag } from '../common/BranchTag';
-import { IconArrowLeft, IconCheck, IconPackage, IconTruck, IconX } from '../common/Icons';
+import { IconCheck, IconPackage, IconPackageReturn, IconX } from '../common/Icons';
 import { fmtNum, fmtPct } from '../../lib/format';
 import clsx from 'clsx';
 
 export function RecommendationCard({
   rec,
   branchNames,
+  branches,
   onStatusChange,
   compact = false,
 }: {
   rec: Recommendation;
   branchNames: Partial<Record<BranchCode, string>>;
+  branches: BranchCode[];
   onStatusChange: (id: string, status: Recommendation['status']) => void;
   compact?: boolean;
 }) {
   const isDone = rec.status !== 'open';
+  const isReturn = rec.kind === 'return';
 
   return (
     <div
@@ -32,11 +35,11 @@ export function RecommendationCard({
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
           style={{
-            background: rec.kind === 'transfer' ? 'color-mix(in srgb, var(--branch-701) 14%, transparent)' : 'color-mix(in srgb, var(--branch-711) 14%, transparent)',
-            color: rec.kind === 'transfer' ? 'var(--branch-701)' : 'var(--branch-711)',
+            background: isReturn ? 'color-mix(in srgb, var(--branch-3) 14%, transparent)' : 'color-mix(in srgb, var(--accent) 14%, transparent)',
+            color: isReturn ? 'var(--branch-3)' : 'var(--accent)',
           }}
         >
-          {rec.kind === 'transfer' ? <IconTruck className="w-4.5 h-4.5" /> : <IconPackage className="w-4.5 h-4.5" />}
+          {isReturn ? <IconPackageReturn className="w-4.5 h-4.5" /> : <IconPackage className="w-4.5 h-4.5" />}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -48,19 +51,19 @@ export function RecommendationCard({
               {rec.stockGroupName}
             </span>
             <Badge tone={rec.severity === 'critical' ? 'critical' : 'warning'}>{rec.severity === 'critical' ? 'عاجل' : 'مراقبة'}</Badge>
+            <Badge tone={isReturn ? 'neutral' : 'accent'} dot={false}>
+              {isReturn ? 'إعادة للمورّد' : 'طلب من المورّد'}
+            </Badge>
             {isDone && <Badge tone={rec.status === 'done' ? 'good' : 'neutral'}>{rec.status === 'done' ? 'تم التنفيذ' : 'تم التجاهل'}</Badge>}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap text-sm">
-            {rec.fromBranch && (
-              <>
-                <BranchTag code={rec.fromBranch} name={branchName(rec.fromBranch, branchNames)} />
-                <IconArrowLeft className="w-3.5 h-3.5 rotate-180" style={{ color: 'var(--muted)' }} />
-              </>
-            )}
-            <BranchTag code={rec.toBranch} name={branchName(rec.toBranch, branchNames)} />
+            <BranchTag code={rec.branch} name={branchName(rec.branch, branchNames)} branches={branches} />
             <span className="font-extrabold tabular-nums" style={{ color: 'var(--text-primary)' }}>
               {fmtNum(rec.suggestedQty)} قطعة
+            </span>
+            <span className="text-xs" style={{ color: 'var(--muted)' }}>
+              {rec.supplierName} · {rec.supplierCode}
             </span>
           </div>
 
@@ -73,10 +76,10 @@ export function RecommendationCard({
           {!compact && (
             <div className="flex items-center gap-3 mt-2 text-[11px] tabular-nums" style={{ color: 'var(--muted)' }}>
               <span>
-                رصيد {branchName(rec.toBranch, branchNames)}: <b style={{ color: 'var(--text-primary)' }}>{fmtNum(rec.toBranchBalance)}</b>
+                رصيد {branchName(rec.branch, branchNames)}: <b style={{ color: 'var(--text-primary)' }}>{fmtNum(rec.branchBalance)}</b>
               </span>
               <span>
-                نسبة البيع: <b style={{ color: 'var(--text-primary)' }}>{fmtPct(rec.toBranchSellThrough)}</b>
+                نسبة البيع: <b style={{ color: 'var(--text-primary)' }}>{fmtPct(rec.branchSellThrough)}</b>
               </span>
               <span>
                 السعر: <b style={{ color: 'var(--text-primary)' }}>{fmtNum(rec.unitPrice)}</b>

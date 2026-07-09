@@ -23,7 +23,7 @@ export function StatTile({
         {icon && (
           <span
             className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: 'color-mix(in srgb, var(--branch-701) 12%, transparent)', color: 'var(--branch-701)' }}
+            style={{ background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }}
           >
             {icon}
           </span>

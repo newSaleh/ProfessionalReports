@@ -1,6 +1,6 @@
 import {
-  BRANCH_CODES,
-  DEFAULT_BRANCH_NAMES,
+  defaultBranchName,
+  type BalanceAnomaly,
   type BranchCode,
   type ModelRow,
   type ModelStat,
@@ -12,132 +12,129 @@ import {
 const clampPos = (n: number) => (n > 0 ? n : 0);
 
 export function branchName(code: BranchCode, names: Partial<Record<BranchCode, string>>) {
-  return names[code] || DEFAULT_BRANCH_NAMES[code];
+  return names[code] || defaultBranchName(code);
 }
 
-export function computeModelStat(row: ModelRow): ModelStat {
-  const soldByBranch: Record<string, number> = {};
-  const balByBranch: Record<string, number> = {};
+export function computeModelStat(row: ModelRow, branches: BranchCode[]): ModelStat {
   let totalSoldPositive = 0;
   let totalBalancePositive = 0;
 
-  for (const b of BRANCH_CODES) {
-    const sold = clampPos(row[`${b}SoldQty` as keyof ModelRow] as number);
-    const bal = clampPos(row[`${b}Balance` as keyof ModelRow] as number);
-    soldByBranch[b] = sold;
-    balByBranch[b] = bal;
-    totalSoldPositive += sold;
-    totalBalancePositive += bal;
+  for (const b of branches) {
+    const data = row.branches[b];
+    totalSoldPositive += clampPos(data?.sold ?? 0);
+    totalBalancePositive += clampPos(data?.balance ?? 0);
   }
 
   const branch = {} as ModelStat['branch'];
-  let bestBranch: BranchCode = BRANCH_CODES[0];
-  let worstBranch: BranchCode = BRANCH_CODES[0];
+  let bestBranch: BranchCode | null = null;
+  let worstBranch: BranchCode | null = null;
 
-  for (const b of BRANCH_CODES) {
-    const sold = soldByBranch[b];
-    const bal = balByBranch[b];
-    const avail = sold + bal;
+  for (const b of branches) {
+    const data = row.branches[b] ?? { sold: 0, balance: 0 };
+    const sold = clampPos(data.sold);
+    const rawBalance = data.balance;
+    const balanceError = rawBalance < 0;
+    const balance = clampPos(rawBalance);
+    const avail = sold + balance;
     const sellThrough = avail > 0 ? sold / avail : 0;
-    const demandShare = totalSoldPositive > 0 ? sold / totalSoldPositive : 1 / BRANCH_CODES.length;
-    const stockShare = totalBalancePositive > 0 ? bal / totalBalancePositive : 1 / BRANCH_CODES.length;
-    branch[b] = { sold, balance: bal, sellThrough, demandShare, stockShare, imbalance: demandShare - stockShare };
-    if (sold > branch[bestBranch].sold) bestBranch = b;
-    if (sold < branch[worstBranch].sold) worstBranch = b;
+    const demandShare = totalSoldPositive > 0 ? sold / totalSoldPositive : 1 / branches.length;
+    const stockShare = totalBalancePositive > 0 ? balance / totalBalancePositive : 1 / branches.length;
+    branch[b] = { sold, balance, rawBalance, balanceError, sellThrough, demandShare, stockShare, imbalance: demandShare - stockShare };
+    if (bestBranch === null || sold > branch[bestBranch].sold) bestBranch = b;
+    if (worstBranch === null || sold < branch[worstBranch].sold) worstBranch = b;
   }
 
   return { row, totalSoldPositive, totalBalancePositive, branch, bestBranch, worstBranch };
 }
 
-export function computeAllStats(rows: ModelRow[]): ModelStat[] {
-  return rows.map(computeModelStat);
+export function computeAllStats(rows: ModelRow[], branches: BranchCode[]): ModelStat[] {
+  return rows.map((r) => computeModelStat(r, branches));
+}
+
+/** Negative balances are physically impossible — flag them as data errors instead of treating them as zero stock. */
+export function findBalanceAnomalies(rows: ModelRow[], branches: BranchCode[]): BalanceAnomaly[] {
+  const out: BalanceAnomaly[] = [];
+  for (const row of rows) {
+    for (const b of branches) {
+      const bal = row.branches[b]?.balance ?? 0;
+      if (bal < 0) {
+        out.push({
+          id: `${row.StockCode}-${b}-anomaly`,
+          stockCode: row.StockCode,
+          modelCode: row.ModelCode,
+          stockGroupName: row.StockGroupName,
+          supplierCode: row.SupplierCode,
+          supplierName: row.SupplierName,
+          branch: b,
+          rawBalance: bal,
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => a.rawBalance - b.rawBalance);
 }
 
 /**
- * Core "wow" feature: for every well-selling model, detect branches running low
- * relative to their own demand, then try to satisfy that demand first from a
- * sister branch sitting on slow-moving surplus before suggesting a new supplier order.
+ * Core "wow" feature: for every well-selling model, look at each branch on its own —
+ * a branch selling fast with little stock left should get more ordered in from the
+ * supplier; a branch sitting on stock that barely moves should send it back to the
+ * supplier. There is no moving stock between branches in this business.
  */
-export function buildRecommendations(rows: ModelRow[], thresholds: ThresholdSettings): Recommendation[] {
+export function buildRecommendations(rows: ModelRow[], branches: BranchCode[], thresholds: ThresholdSettings): Recommendation[] {
   const recs: Recommendation[] = [];
 
   for (const row of rows) {
-    const stat = computeModelStat(row);
+    const stat = computeModelStat(row, branches);
     if (stat.totalSoldPositive < thresholds.minPopularity) continue;
 
-    const avgSoldPerActiveBranch =
-      stat.totalSoldPositive / Math.max(1, BRANCH_CODES.filter((b) => stat.branch[b].sold > 0).length);
+    const activeBranches = branches.filter((b) => stat.branch[b].sold > 0);
+    const avgSoldPerActiveBranch = stat.totalSoldPositive / Math.max(1, activeBranches.length);
 
-    // remaining transferable pool per branch, depleted as we allocate transfers
-    const surplusPool: Partial<Record<BranchCode, number>> = {};
-    for (const b of BRANCH_CODES) {
+    for (const b of branches) {
       const s = stat.branch[b];
-      if (s.sellThrough <= thresholds.surplusSellThrough && s.balance >= thresholds.surplusMinBalance) {
-        surplusPool[b] = s.balance;
-      }
-    }
+      if (s.balanceError) continue; // surfaced separately as a data-quality alert, not a stocking decision
 
-    const atRisk = BRANCH_CODES.filter((b) => {
-      const s = stat.branch[b];
-      return s.sellThrough >= thresholds.highSellThrough && s.balance <= thresholds.lowStockUnits;
-    }).sort((a, b) => stat.branch[a].balance - stat.branch[b].balance);
-
-    for (const toBranch of atRisk) {
-      const s = stat.branch[toBranch];
-      const target = Math.max(s.sold, avgSoldPerActiveBranch) * thresholds.coverTargetMultiplier;
-      const need = Math.max(1, Math.round(target - s.balance));
-
-      // find best surplus donor (largest remaining pool, excluding self)
-      const donor = (Object.keys(surplusPool) as BranchCode[])
-        .filter((b) => b !== toBranch && (surplusPool[b] ?? 0) > 0)
-        .sort((a, b) => (surplusPool[b] ?? 0) - (surplusPool[a] ?? 0))[0];
-
-      const critical = s.balance <= thresholds.lowStockUnits / 2;
-
-      if (donor) {
-        const donorStat = stat.branch[donor];
-        const transferable = Math.floor((surplusPool[donor] ?? 0) * 0.5);
-        const qty = Math.max(1, Math.min(need, transferable));
-        surplusPool[donor] = (surplusPool[donor] ?? 0) - qty;
-
+      if (s.sellThrough >= thresholds.highSellThrough && s.balance <= thresholds.lowStockUnits) {
+        const target = Math.max(s.sold, avgSoldPerActiveBranch) * thresholds.coverTargetMultiplier;
+        const qty = Math.max(1, Math.round(target - s.balance));
+        const critical = s.balance <= thresholds.lowStockUnits / 2;
         recs.push({
-          id: `${row.StockCode}-${toBranch}-transfer`,
-          kind: 'transfer',
+          id: `${row.StockCode}-${b}-order`,
+          kind: 'order',
           severity: critical ? 'critical' : 'watch',
           score: score(stat.totalSoldPositive, s.sellThrough, s.balance, critical),
           modelCode: row.ModelCode,
           stockCode: row.StockCode,
           stockGroupName: row.StockGroupName,
+          supplierCode: row.SupplierCode,
           supplierName: row.SupplierName,
           unitPrice: row.UnitPrice,
-          toBranch,
-          toBranchSold: s.sold,
-          toBranchBalance: s.balance,
-          toBranchSellThrough: s.sellThrough,
-          fromBranch: donor,
-          fromBranchBalance: donorStat.balance,
-          fromBranchSellThrough: donorStat.sellThrough,
+          branch: b,
+          branchSold: s.sold,
+          branchBalance: s.balance,
+          branchSellThrough: s.sellThrough,
           suggestedQty: qty,
-          reason: transferReason(row, toBranch, s, donor, donorStat, qty),
+          reason: orderReason(row, b, s, qty),
           status: 'open',
         });
-      } else {
+      } else if (s.sellThrough <= thresholds.surplusSellThrough && s.balance >= thresholds.surplusMinBalance) {
         recs.push({
-          id: `${row.StockCode}-${toBranch}-order`,
-          kind: 'order',
-          severity: critical ? 'critical' : 'watch',
-          score: score(stat.totalSoldPositive, s.sellThrough, s.balance, critical) - 5,
+          id: `${row.StockCode}-${b}-return`,
+          kind: 'return',
+          severity: s.sellThrough === 0 ? 'critical' : 'watch',
+          score: score(stat.totalSoldPositive, 1 - s.sellThrough, -s.balance, s.sellThrough === 0) - 8,
           modelCode: row.ModelCode,
           stockCode: row.StockCode,
           stockGroupName: row.StockGroupName,
+          supplierCode: row.SupplierCode,
           supplierName: row.SupplierName,
           unitPrice: row.UnitPrice,
-          toBranch,
-          toBranchSold: s.sold,
-          toBranchBalance: s.balance,
-          toBranchSellThrough: s.sellThrough,
-          suggestedQty: need,
-          reason: orderReason(row, toBranch, s, need),
+          branch: b,
+          branchSold: s.sold,
+          branchBalance: s.balance,
+          branchSellThrough: s.sellThrough,
+          suggestedQty: s.balance,
+          reason: returnReason(row, b, s),
           status: 'open',
         });
       }
@@ -155,19 +152,12 @@ function pct(n: number) {
   return `${Math.round(n * 100)}%`;
 }
 
-function transferReason(
-  row: ModelRow,
-  toBranch: BranchCode,
-  to: ModelStat['branch'][BranchCode],
-  fromBranch: BranchCode,
-  from: ModelStat['branch'][BranchCode],
-  qty: number,
-) {
-  return `موديل ${row.ModelCode} (${row.StockGroupName}) يحقق نسبة بيع ${pct(to.sellThrough)} من المتوفر في فرع ${toBranch}، والرصيد الحالي ${to.balance} قطعة فقط. فرع ${fromBranch} لديه ${from.balance} قطعة بنسبة بيع ${pct(from.sellThrough)} فقط — يُنصح بنقل ${qty} قطعة من ${fromBranch} إلى ${toBranch}.`;
+function orderReason(row: ModelRow, b: BranchCode, s: ModelStat['branch'][BranchCode], qty: number) {
+  return `موديل ${row.ModelCode} (${row.StockGroupName}) يحقق نسبة بيع ${pct(s.sellThrough)} من المتوفر في فرع ${b}، والرصيد الحالي ${s.balance} قطعة فقط — يُنصح بطلب ${qty} قطعة إضافية من المورّد ${row.SupplierName} (${row.SupplierCode}).`;
 }
 
-function orderReason(row: ModelRow, toBranch: BranchCode, to: ModelStat['branch'][BranchCode], qty: number) {
-  return `موديل ${row.ModelCode} (${row.StockGroupName}) يحقق نسبة بيع ${pct(to.sellThrough)} من المتوفر في فرع ${toBranch}، والرصيد الحالي ${to.balance} قطعة فقط. لا يوجد رصيد فائض في الفروع الأخرى — يُنصح بطلب ${qty} قطعة إضافية من المورّد (${row.SupplierName}).`;
+function returnReason(row: ModelRow, b: BranchCode, s: ModelStat['branch'][BranchCode]) {
+  return `موديل ${row.ModelCode} (${row.StockGroupName}) بطيء الحركة في فرع ${b} — نسبة بيع ${pct(s.sellThrough)} فقط من رصيد ${s.balance} قطعة — يُنصح بإعادة الكمية إلى المورّد ${row.SupplierName} (${row.SupplierCode}) بدل الاحتفاظ بها راكدة.`;
 }
 
 // ---- multi-snapshot trend analysis ----
@@ -176,6 +166,7 @@ export interface TrendRow {
   stockCode: string;
   modelCode: string;
   stockGroupName: string;
+  supplierCode: string;
   supplierName: string;
   unitPrice: number;
   soldDelta: number;
@@ -196,10 +187,8 @@ export function compareSnapshots(prev: Snapshot, curr: Snapshot): TrendRow[] {
 
     const branchDelta = {} as Record<BranchCode, number>;
     let soldDelta = 0;
-    for (const b of BRANCH_CODES) {
-      const d = clampPos(
-        (row[`${b}SoldQty` as keyof ModelRow] as number) - (before[`${b}SoldQty` as keyof ModelRow] as number),
-      );
+    for (const b of curr.branches) {
+      const d = clampPos((row.branches[b]?.sold ?? 0) - (before.branches[b]?.sold ?? 0));
       branchDelta[b] = d;
       soldDelta += d;
     }
@@ -211,6 +200,7 @@ export function compareSnapshots(prev: Snapshot, curr: Snapshot): TrendRow[] {
       stockCode: row.StockCode,
       modelCode: row.ModelCode,
       stockGroupName: row.StockGroupName,
+      supplierCode: row.SupplierCode,
       supplierName: row.SupplierName,
       unitPrice: row.UnitPrice,
       soldDelta,

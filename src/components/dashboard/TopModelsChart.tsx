@@ -1,15 +1,17 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { BRANCH_CODES, type BranchCode, type ModelRow } from '../../lib/types';
+import type { BranchCode, ModelRow } from '../../lib/types';
 import { branchColor } from '../common/BranchTag';
 import { branchName } from '../../lib/analytics';
 import { fmtNum } from '../../lib/format';
 
 export function TopModelsChart({
   rows,
+  branches,
   branchNames,
   limit = 8,
 }: {
   rows: ModelRow[];
+  branches: BranchCode[];
   branchNames: Partial<Record<BranchCode, string>>;
   limit?: number;
 }) {
@@ -18,7 +20,7 @@ export function TopModelsChart({
     .slice(0, limit)
     .map((r) => {
       const entry: Record<string, string | number> = { name: r.ModelCode, total: r.TotalQtySold };
-      for (const b of BRANCH_CODES) entry[b] = Math.max(0, r[`${b}SoldQty` as keyof ModelRow] as number);
+      for (const b of branches) entry[b] = Math.max(0, r.branches[b]?.sold ?? 0);
       return entry;
     })
     .reverse();
@@ -38,7 +40,7 @@ export function TopModelsChart({
           orientation="right"
         />
         <Tooltip
-          cursor={{ fill: 'color-mix(in srgb, var(--branch-701) 6%, transparent)' }}
+          cursor={{ fill: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}
           content={({ active, payload, label }) => {
             if (!active || !payload || payload.length === 0) return null;
             return (
@@ -66,8 +68,8 @@ export function TopModelsChart({
             );
           }}
         />
-        {BRANCH_CODES.map((b) => (
-          <Bar key={b} dataKey={b} stackId="s" fill={branchColor(b)} radius={0} maxBarSize={22} />
+        {branches.map((b) => (
+          <Bar key={b} dataKey={b} stackId="s" fill={branchColor(b, branches)} radius={0} maxBarSize={22} />
         ))}
       </BarChart>
     </ResponsiveContainer>
