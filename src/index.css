@@ -1,0 +1,111 @@
+@import 'tailwindcss';
+
+:root {
+  --surface-1: #fcfcfb;
+  --page: #f4f5f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --gridline: #e1e0d9;
+  --border: rgba(11, 11, 11, 0.1);
+
+  --branch-701: #2a78d6;
+  --branch-706: #1baf7a;
+  --branch-707: #4a3aa7;
+  --branch-711: #eb6834;
+  --branch-803: #e87ba4;
+
+  --good: #0ca30c;
+  --warning: #b8790f;
+  --serious: #c15a36;
+  --critical: #d03b3b;
+}
+
+[data-theme='dark'] {
+  --surface-1: #1a1a19;
+  --page: #101012;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --gridline: #2c2c2a;
+  --border: rgba(255, 255, 255, 0.1);
+
+  --branch-701: #3987e5;
+  --branch-706: #199e70;
+  --branch-707: #9085e9;
+  --branch-711: #d95926;
+  --branch-803: #d55181;
+
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #e35b5b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: 'IBM Plex Sans Arabic', 'Tajawal', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--branch-701) 30%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 8px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-in {
+  animation: fade-in-up 0.35s ease both;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--gridline) 25%, color-mix(in srgb, var(--gridline) 50%, transparent) 37%, var(--gridline) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
