@@ -10,9 +10,9 @@ const toneStyle: Record<Tone, { bg: string; fg: string; dot: string }> = {
   critical: { bg: 'color-mix(in srgb, var(--critical) 16%, transparent)', fg: 'var(--critical)', dot: 'var(--critical)' },
   neutral: { bg: 'var(--gridline)', fg: 'var(--text-secondary)', dot: 'var(--muted)' },
   accent: {
-    bg: 'color-mix(in srgb, var(--branch-701) 14%, transparent)',
-    fg: 'var(--branch-701)',
-    dot: 'var(--branch-701)',
+    bg: 'color-mix(in srgb, var(--accent) 14%, transparent)',
+    fg: 'var(--accent)',
+    dot: 'var(--accent)',
   },
 };
 

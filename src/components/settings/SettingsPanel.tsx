@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { AppData } from '../../hooks/useAppData';
 import { Card, CardHeader } from '../common/Card';
-import { BRANCH_CODES, DEFAULT_BRANCH_NAMES, DEFAULT_THRESHOLDS } from '../../lib/types';
+import { defaultBranchName, DEFAULT_THRESHOLDS } from '../../lib/types';
 import { branchColor } from '../common/BranchTag';
 import { IconCheck } from '../common/Icons';
 
@@ -29,24 +29,30 @@ export function SettingsPanel({ data }: { data: AppData }) {
       </div>
 
       <Card>
-        <CardHeader title="أسماء الفروع" subtitle="استبدل الأكواد (701، 706…) بأسماء تعرفها فرقك" />
-        <div className="grid sm:grid-cols-2 gap-3">
-          {BRANCH_CODES.map((b) => (
-            <label key={b} className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full shrink-0" style={{ background: branchColor(b) }} />
-              <span className="text-xs font-bold w-14 shrink-0" style={{ color: 'var(--muted)' }}>
-                {b}
-              </span>
-              <input
-                value={names[b] ?? ''}
-                onChange={(e) => setNames((n) => ({ ...n, [b]: e.target.value }))}
-                placeholder={DEFAULT_BRANCH_NAMES[b]}
-                className="flex-1 rounded-lg border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--border)', background: 'var(--surface-1)', color: 'var(--text-primary)' }}
-              />
-            </label>
-          ))}
-        </div>
+        <CardHeader title="أسماء الفروع" subtitle="استبدل أكواد الفروع كما وردت في ملفك بأسماء تعرفها فرقك" />
+        {data.allBranchCodes.length === 0 ? (
+          <p className="text-sm" style={{ color: 'var(--muted)' }}>
+            لا توجد فروع مكتشَفة بعد — ارفع ملفًا من تبويب «البيانات واللقطات».
+          </p>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {data.allBranchCodes.map((b) => (
+              <label key={b} className="flex items-center gap-2.5">
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ background: branchColor(b, data.allBranchCodes) }} />
+                <span className="text-xs font-bold w-14 shrink-0 truncate" style={{ color: 'var(--muted)' }}>
+                  {b}
+                </span>
+                <input
+                  value={names[b] ?? ''}
+                  onChange={(e) => setNames((n) => ({ ...n, [b]: e.target.value }))}
+                  placeholder={defaultBranchName(b)}
+                  className="flex-1 rounded-lg border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--border)', background: 'var(--surface-1)', color: 'var(--text-primary)' }}
+                />
+              </label>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card>
@@ -75,7 +81,7 @@ export function SettingsPanel({ data }: { data: AppData }) {
             onChange={(v) => setThresholds((t) => ({ ...t, lowStockUnits: v }))}
           />
           <ThresholdField
-            label="نسبة البيع لاعتبار الفرع لديه فائض بطيء الحركة"
+            label="نسبة البيع لاعتبار البضاعة راكدة (يُنصح بإعادتها للمورّد)"
             value={Math.round(thresholds.surplusSellThrough * 100)}
             min={5}
             max={60}
@@ -83,7 +89,7 @@ export function SettingsPanel({ data }: { data: AppData }) {
             onChange={(v) => setThresholds((t) => ({ ...t, surplusSellThrough: v / 100 }))}
           />
           <ThresholdField
-            label="أدنى رصيد فائض قابل للنقل (قطعة)"
+            label="أدنى رصيد راكد يستحق التوصية بإعادته (قطعة)"
             value={thresholds.surplusMinBalance}
             min={1}
             max={100}
@@ -100,7 +106,7 @@ export function SettingsPanel({ data }: { data: AppData }) {
           <button
             onClick={() => setThresholds(DEFAULT_THRESHOLDS)}
             className="self-start text-xs font-bold"
-            style={{ color: 'var(--branch-701)' }}
+            style={{ color: 'var(--accent)' }}
           >
             استعادة القيم الافتراضية
           </button>
@@ -111,7 +117,7 @@ export function SettingsPanel({ data }: { data: AppData }) {
         <button
           onClick={save}
           className="flex items-center gap-2 text-sm font-bold rounded-xl px-5 py-2.5 text-white"
-          style={{ background: 'var(--branch-701)' }}
+          style={{ background: 'var(--accent)' }}
         >
           حفظ الإعدادات
         </button>
@@ -148,7 +154,7 @@ function ThresholdField({
         <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
           {label}
         </span>
-        <span className="font-extrabold tabular-nums" style={{ color: 'var(--branch-701)' }}>
+        <span className="font-extrabold tabular-nums" style={{ color: 'var(--accent)' }}>
           {value}
           {suffix}
         </span>
@@ -161,7 +167,7 @@ function ThresholdField({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full accent-current"
-        style={{ color: 'var(--branch-701)' }}
+        style={{ color: 'var(--accent)' }}
       />
     </div>
   );

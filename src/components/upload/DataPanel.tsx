@@ -41,9 +41,9 @@ export function DataPanel({ data }: { data: AppData }) {
           }}
           onClick={() => fileRef.current?.click()}
           className={clsx('rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center py-12 px-6 cursor-pointer transition-colors')}
-          style={{ borderColor: dragging ? 'var(--branch-701)' : 'var(--border)', background: dragging ? 'color-mix(in srgb, var(--branch-701) 5%, transparent)' : 'transparent' }}
+          style={{ borderColor: dragging ? 'var(--accent)' : 'var(--border)', background: dragging ? 'color-mix(in srgb, var(--accent) 5%, transparent)' : 'transparent' }}
         >
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'color-mix(in srgb, var(--branch-701) 14%, transparent)', color: 'var(--branch-701)' }}>
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'color-mix(in srgb, var(--accent) 14%, transparent)', color: 'var(--accent)' }}>
             <IconUpload className="w-6 h-6" />
           </div>
           <h4 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>

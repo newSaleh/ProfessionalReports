@@ -106,6 +106,15 @@ export const IconPackage = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export const IconPackageReturn = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M20 8 12 3 4 8v8l4 2.2" />
+    <path d="M4 8l8 5 8-5M12 13v3" />
+    <path d="M15 19h-4a2.2 2.2 0 0 1 0-4.4h5.5" />
+    <path d="M14.5 12.5 16.5 14.6l-2 2.1" />
+  </svg>
+);
+
 export const IconCheck = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <path d="M20 6 9 17l-5-5" />
@@ -155,5 +164,21 @@ export const IconDownload = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <path d="M12 4v12M7 11l5 5 5-5" />
     <path d="M4 20h16" />
+  </svg>
+);
+
+export const IconPrinter = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M6 9V3h12v6" />
+    <rect x="3.5" y="9" width="17" height="8" rx="1.5" />
+    <path d="M6 14h12v7H6z" />
+  </svg>
+);
+
+export const IconFileSpreadsheet = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 2v6h6" />
+    <path d="M8 13h8M8 17h8M8 13v4M12 13v4M16 13v4" />
   </svg>
 );

@@ -1,5 +1,5 @@
-export const BRANCH_CODES = ['701', '706', '707', '711', '803'] as const;
-export type BranchCode = (typeof BRANCH_CODES)[number];
+/** A branch code is whatever string the source system uses (e.g. "701", "RIYADH-1") — never hardcoded. */
+export type BranchCode = string;
 
 export interface ModelRow {
   SupplierCode: string;
@@ -10,16 +10,8 @@ export interface ModelRow {
   UnitPrice: number;
   TotalQtySold: number;
   TotalBalance: number;
-  '701SoldQty': number;
-  '706SoldQty': number;
-  '707SoldQty': number;
-  '711SoldQty': number;
-  '803SoldQty': number;
-  '701Balance': number;
-  '706Balance': number;
-  '707Balance': number;
-  '711Balance': number;
-  '803Balance': number;
+  /** Per-branch figures, keyed by whatever branch codes this snapshot has. */
+  branches: Record<BranchCode, { sold: number; balance: number }>;
 }
 
 export interface Snapshot {
@@ -31,6 +23,8 @@ export interface Snapshot {
   label: string;
   source: 'seed' | 'upload';
   rows: ModelRow[];
+  /** Branch codes detected in this snapshot's source file, in column order. */
+  branches: BranchCode[];
 }
 
 export interface BranchSettings {
@@ -55,15 +49,13 @@ export const DEFAULT_THRESHOLDS: ThresholdSettings = {
   coverTargetMultiplier: 1.6,
 };
 
-export const DEFAULT_BRANCH_NAMES: Record<BranchCode, string> = {
-  '701': 'فرع 701',
-  '706': 'فرع 706',
-  '707': 'فرع 707',
-  '711': 'فرع 711',
-  '803': 'فرع 803',
-};
+export function defaultBranchName(code: BranchCode): string {
+  return `فرع ${code}`;
+}
 
-export type RecommendationKind = 'transfer' | 'order';
+/** No more "move stock between branches" — the real workflow is either order more from the
+ *  supplier for a branch that's selling out, or return slow-moving stock to the supplier. */
+export type RecommendationKind = 'order' | 'return';
 export type RecommendationSeverity = 'critical' | 'watch';
 
 export interface Recommendation {
@@ -74,35 +66,47 @@ export interface Recommendation {
   modelCode: string;
   stockCode: string;
   stockGroupName: string;
+  supplierCode: string;
   supplierName: string;
   unitPrice: number;
-  toBranch: BranchCode;
-  toBranchSold: number;
-  toBranchBalance: number;
-  toBranchSellThrough: number;
-  fromBranch?: BranchCode;
-  fromBranchBalance?: number;
-  fromBranchSellThrough?: number;
+  branch: BranchCode;
+  branchSold: number;
+  branchBalance: number;
+  branchSellThrough: number;
   suggestedQty: number;
   reason: string;
   status: 'open' | 'done' | 'dismissed';
+}
+
+export interface BranchStat {
+  sold: number;
+  /** Balance clamped to >= 0 for math (ratios, totals). Use rawBalance to detect/display errors. */
+  balance: number;
+  rawBalance: number;
+  balanceError: boolean;
+  sellThrough: number;
+  demandShare: number;
+  stockShare: number;
+  imbalance: number;
 }
 
 export interface ModelStat {
   row: ModelRow;
   totalSoldPositive: number;
   totalBalancePositive: number;
-  branch: Record<
-    BranchCode,
-    {
-      sold: number;
-      balance: number;
-      sellThrough: number;
-      demandShare: number;
-      stockShare: number;
-      imbalance: number;
-    }
-  >;
-  bestBranch: BranchCode;
-  worstBranch: BranchCode;
+  branch: Record<BranchCode, BranchStat>;
+  bestBranch: BranchCode | null;
+  worstBranch: BranchCode | null;
+}
+
+/** A branch balance that is physically impossible (negative) — a data-entry error upstream, surfaced instead of silently zeroed. */
+export interface BalanceAnomaly {
+  id: string;
+  stockCode: string;
+  modelCode: string;
+  stockGroupName: string;
+  supplierCode: string;
+  supplierName: string;
+  branch: BranchCode;
+  rawBalance: number;
 }

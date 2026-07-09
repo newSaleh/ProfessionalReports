@@ -6,11 +6,14 @@ import { TopBar } from './components/layout/TopBar';
 import { NAV_ITEMS, type TabId } from './components/layout/nav';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { Recommendations } from './components/recommendations/Recommendations';
+import { DataAlerts } from './components/alerts/DataAlerts';
 import { Explorer } from './components/explorer/Explorer';
 import { Trends } from './components/trends/Trends';
 import { Heatmap } from './components/heatmap/Heatmap';
 import { DataPanel } from './components/upload/DataPanel';
 import { SettingsPanel } from './components/settings/SettingsPanel';
+import { PrintReport } from './components/report/PrintReport';
+import { exportFullReportExcel } from './lib/exportWorkbook';
 import { IconCheck, IconX } from './components/common/Icons';
 
 export default function App() {
@@ -32,13 +35,23 @@ export default function App() {
   const criticalCount = data.recommendations.filter((r) => r.status === 'open' && r.severity === 'critical').length;
   const activeLabel = NAV_ITEMS.find((n) => n.id === tab)?.label ?? '';
 
+  const handleExportExcel = () => {
+    if (!data.selectedSnapshot) return;
+    exportFullReportExcel({
+      snapshot: data.selectedSnapshot,
+      recommendations: data.recommendations,
+      anomalies: data.anomalies,
+      branchNames: data.branchNames,
+    });
+  };
+
   if (data.loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--page)' }}>
         <div className="flex flex-col items-center gap-3">
           <div
             className="w-10 h-10 rounded-full border-4 animate-spin"
-            style={{ borderColor: 'var(--gridline)', borderTopColor: 'var(--branch-701)' }}
+            style={{ borderColor: 'var(--gridline)', borderTopColor: 'var(--accent)' }}
           />
           <p className="text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>
             جارِ تحميل البيانات…
@@ -54,7 +67,7 @@ export default function App() {
         className="hidden lg:flex flex-col w-72 shrink-0 border-e px-4 py-5 sticky top-0 h-screen"
         style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}
       >
-        <SidebarContent active={tab} onSelect={setTab} criticalCount={criticalCount} />
+        <SidebarContent active={tab} onSelect={setTab} criticalCount={criticalCount} anomalyCount={data.anomalies.length} />
       </aside>
 
       {drawerOpen && (
@@ -68,6 +81,7 @@ export default function App() {
                 setDrawerOpen(false);
               }}
               criticalCount={criticalCount}
+              anomalyCount={data.anomalies.length}
               onClose={() => setDrawerOpen(false)}
             />
           </aside>
@@ -83,12 +97,15 @@ export default function App() {
           theme={theme}
           onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
           onQuickUpload={(f) => void data.addSnapshotFromFile(f)}
+          onPrint={() => window.print()}
+          onExportExcel={handleExportExcel}
           title={activeLabel}
         />
 
         <main className="flex-1 min-w-0 p-4 lg:p-6 max-w-[1400px] w-full mx-auto">
           {tab === 'dashboard' && <Dashboard data={data} onNavigate={setTab} />}
           {tab === 'recommendations' && <Recommendations data={data} />}
+          {tab === 'alerts' && <DataAlerts data={data} />}
           {tab === 'explorer' && <Explorer data={data} />}
           {tab === 'trends' && <Trends data={data} />}
           {tab === 'heatmap' && <Heatmap data={data} />}
@@ -122,6 +139,8 @@ export default function App() {
           </div>
         )}
       </div>
+
+      <PrintReport data={data} />
     </div>
   );
 }

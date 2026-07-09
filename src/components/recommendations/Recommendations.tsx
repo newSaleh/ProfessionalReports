@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AppData } from '../../hooks/useAppData';
 import { Card } from '../common/Card';
 import { RecommendationCard } from './RecommendationCard';
@@ -6,48 +6,36 @@ import { EmptyState } from '../common/EmptyState';
 import { IconBolt, IconDownload } from '../common/Icons';
 import { StatTile } from '../common/StatTile';
 import { fmtNum } from '../../lib/format';
-import { downloadCsv } from '../../lib/csv';
+import { exportRecommendationsExcel } from '../../lib/exportWorkbook';
 import clsx from 'clsx';
-import { branchName } from '../../lib/analytics';
 
-type FilterKind = 'all' | 'transfer' | 'order';
+type FilterKind = 'all' | 'order' | 'return';
 type FilterStatus = 'open' | 'done' | 'dismissed' | 'all';
+
+const PAGE_SIZE = 30;
 
 export function Recommendations({ data }: { data: AppData }) {
   const [kind, setKind] = useState<FilterKind>('all');
   const [status, setStatus] = useState<FilterStatus>('open');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const branches = data.selectedSnapshot?.branches ?? [];
+
+  useEffect(() => setVisibleCount(PAGE_SIZE), [kind, status]);
 
   const all = data.recommendations;
   const open = all.filter((r) => r.status === 'open');
   const critical = open.filter((r) => r.severity === 'critical');
-  const transfers = open.filter((r) => r.kind === 'transfer');
   const orders = open.filter((r) => r.kind === 'order');
+  const returns = open.filter((r) => r.kind === 'return');
   const unitsToMove = open.reduce((a, r) => a + r.suggestedQty, 0);
 
   const filtered = useMemo(
-    () =>
-      all.filter((r) => (kind === 'all' || r.kind === kind) && (status === 'all' || r.status === status)),
+    () => all.filter((r) => (kind === 'all' || r.kind === kind) && (status === 'all' || r.status === status)),
     [all, kind, status],
   );
 
-  const exportCsv = () => {
-    downloadCsv(
-      `توصيات-التوزيع-${data.selectedSnapshot?.date ?? ''}.csv`,
-      ['الموديل', 'الفئة', 'المورد', 'النوع', 'الأولوية', 'من فرع', 'إلى فرع', 'الكمية المقترحة', 'رصيد الفرع المستهدف', 'نسبة البيع', 'السبب'],
-      filtered.map((r) => [
-        r.modelCode,
-        r.stockGroupName,
-        r.supplierName,
-        r.kind === 'transfer' ? 'نقل بين فروع' : 'طلب من المورد',
-        r.severity === 'critical' ? 'عاجل' : 'مراقبة',
-        r.fromBranch ? branchName(r.fromBranch, data.branchNames) : '-',
-        branchName(r.toBranch, data.branchNames),
-        r.suggestedQty,
-        r.toBranchBalance,
-        `${Math.round(r.toBranchSellThrough * 100)}%`,
-        r.reason,
-      ]),
-    );
+  const exportExcel = () => {
+    exportRecommendationsExcel(filtered, data.branchNames, data.selectedSnapshot?.date ?? '');
   };
 
   return (
@@ -55,26 +43,26 @@ export function Recommendations({ data }: { data: AppData }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-extrabold" style={{ color: 'var(--text-primary)' }}>
-            توصيات التوزيع
+            توصيات التوريد
           </h2>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-            محرّك يحلّل كل موديل رائج ويقترح النقل بين الفروع قبل اللجوء لطلب جديد من المورّد
+            محرّك يحلّل كل موديل رائج في كل فرع ويقترح إما طلب كمية إضافية من المورّد أو إعادة الكميات الراكدة إليه
           </p>
         </div>
         <button
-          onClick={exportCsv}
+          onClick={exportExcel}
           className="flex items-center gap-1.5 text-sm font-bold rounded-xl px-3.5 py-2.5 border"
           style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
         >
           <IconDownload className="w-4 h-4" />
-          تصدير CSV
+          تصدير Excel
         </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="توصيات مفتوحة" value={fmtNum(open.length)} hint={`${critical.length} عاجلة`} />
-        <StatTile label="نقل بين الفروع" value={fmtNum(transfers.length)} hint="بدون تكلفة شراء" />
-        <StatTile label="طلب من المورّد" value={fmtNum(orders.length)} hint="لا يوجد فائض متاح" />
+        <StatTile label="طلب من المورّد" value={fmtNum(orders.length)} hint="فروع تبيع بسرعة ورصيدها منخفض" />
+        <StatTile label="إعادة للمورّد" value={fmtNum(returns.length)} hint="بضاعة راكدة لا تتحرك" />
         <StatTile label="إجمالي القطع المقترحة" value={fmtNum(unitsToMove)} hint="عبر كل التوصيات المفتوحة" />
       </div>
 
@@ -107,8 +95,8 @@ export function Recommendations({ data }: { data: AppData }) {
             {(
               [
                 ['all', 'كل الأنواع'],
-                ['transfer', 'نقل بين فروع'],
                 ['order', 'طلب من المورّد'],
+                ['return', 'إعادة للمورّد'],
               ] as [FilterKind, string][]
             ).map(([id, label]) => (
               <button
@@ -133,11 +121,33 @@ export function Recommendations({ data }: { data: AppData }) {
               subtitle="جرّب تغيير الفلاتر أعلاه، أو ارجع للقائمة المفتوحة لمتابعة الفرص الحالية."
             />
           ) : (
-            <div className="flex flex-col gap-3">
-              {filtered.map((r) => (
-                <RecommendationCard key={r.id} rec={r} branchNames={data.branchNames} onStatusChange={data.setRecommendationStatus} />
-              ))}
-            </div>
+            <>
+              <div className="flex flex-col gap-3">
+                {filtered.slice(0, visibleCount).map((r) => (
+                  <RecommendationCard
+                    key={r.id}
+                    rec={r}
+                    branchNames={data.branchNames}
+                    branches={branches}
+                    onStatusChange={data.setRecommendationStatus}
+                  />
+                ))}
+              </div>
+              {filtered.length > visibleCount && (
+                <div className="flex flex-col items-center gap-1 pt-4">
+                  <button
+                    onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                    className="text-sm font-bold rounded-xl px-4 py-2 border"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                  >
+                    تحميل المزيد
+                  </button>
+                  <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                    {fmtNum(visibleCount)} من {fmtNum(filtered.length)}
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Card>

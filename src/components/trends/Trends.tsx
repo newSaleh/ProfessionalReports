@@ -7,7 +7,6 @@ import { EmptyState } from '../common/EmptyState';
 import { Badge } from '../common/Badge';
 import { BranchLegend } from '../common/BranchLegend';
 import { compareSnapshots } from '../../lib/analytics';
-import { BRANCH_CODES } from '../../lib/types';
 import { branchColor } from '../common/BranchTag';
 import { fmtDate, fmtNum } from '../../lib/format';
 import { IconTrend, IconUpload, IconAlert } from '../common/Icons';
@@ -42,7 +41,7 @@ export function Trends({ data }: { data: AppData }) {
             title="لا توجد بيانات كافية للمقارنة بعد"
             subtitle="ارفع تقرير Top Models غدًا أو الأسبوع القادم لرؤية سرعة المبيعات الفعلية، والموديلات المتسارعة، والوقت المتوقع لنفاد كل صنف."
             action={
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold" style={{ color: 'var(--branch-701)' }}>
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold" style={{ color: 'var(--accent)' }}>
                 <IconUpload className="w-3.5 h-3.5" /> من تبويب «البيانات واللقطات»
               </span>
             }
@@ -52,6 +51,7 @@ export function Trends({ data }: { data: AppData }) {
     );
   }
 
+  const branches = selectedSnapshot.branches;
   const trend = compareSnapshots(baseline, selectedSnapshot);
   const days = Math.max(1, Math.round((selectedSnapshot.capturedAt - baseline.capturedAt) / 86_400_000));
   const totalDelta = trend.reduce((a, t) => a + t.soldDelta, 0);
@@ -63,7 +63,7 @@ export function Trends({ data }: { data: AppData }) {
   const chartData = [...top]
     .map((t) => {
       const entry: Record<string, string | number> = { name: t.modelCode };
-      for (const b of BRANCH_CODES) entry[b] = t.branchDelta[b];
+      for (const b of branches) entry[b] = t.branchDelta[b];
       return entry;
     })
     .reverse();
@@ -116,7 +116,7 @@ export function Trends({ data }: { data: AppData }) {
                 <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--muted)' }} axisLine={{ stroke: 'var(--gridline)' }} tickLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: 'var(--text-primary)', fontWeight: 700 }} axisLine={false} tickLine={false} width={70} orientation="right" />
                 <Tooltip
-                  cursor={{ fill: 'color-mix(in srgb, var(--branch-701) 6%, transparent)' }}
+                  cursor={{ fill: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}
                   content={({ active, payload, label }) => {
                     if (!active || !payload) return null;
                     return (
@@ -141,13 +141,13 @@ export function Trends({ data }: { data: AppData }) {
                     );
                   }}
                 />
-                {BRANCH_CODES.map((b) => (
-                  <Bar key={b} dataKey={b} stackId="s" fill={branchColor(b)} maxBarSize={22} />
+                {branches.map((b) => (
+                  <Bar key={b} dataKey={b} stackId="s" fill={branchColor(b, branches)} maxBarSize={22} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
             <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
-              <BranchLegend branchNames={data.branchNames} />
+              <BranchLegend branches={branches} branchNames={data.branchNames} />
             </div>
           </>
         )}
@@ -163,6 +163,9 @@ export function Trends({ data }: { data: AppData }) {
               <tr className="border-b text-xs" style={{ borderColor: 'var(--border)' }}>
                 <th className="px-4 py-2.5 text-start font-bold" style={{ color: 'var(--muted)' }}>
                   الموديل
+                </th>
+                <th className="px-3 py-2.5 text-start font-bold" style={{ color: 'var(--muted)' }}>
+                  المورّد
                 </th>
                 <th className="px-3 py-2.5 font-bold" style={{ color: 'var(--muted)' }}>
                   مباع خلال الفترة
@@ -187,6 +190,12 @@ export function Trends({ data }: { data: AppData }) {
                     </div>
                     <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
                       {t.stockGroupName}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div style={{ color: 'var(--text-primary)' }}>{t.supplierName}</div>
+                    <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
+                      {t.supplierCode}
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-center font-bold tabular-nums" style={{ color: t.soldDelta > 0 ? 'var(--good)' : 'var(--muted)' }}>

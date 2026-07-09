@@ -9,11 +9,17 @@
   --gridline: #e1e0d9;
   --border: rgba(11, 11, 11, 0.1);
 
-  --branch-701: #2a78d6;
-  --branch-706: #1baf7a;
-  --branch-707: #4a3aa7;
-  --branch-711: #eb6834;
-  --branch-803: #e87ba4;
+  --accent: #2a78d6;
+
+  /* categorical palette for a dynamic number of branches, assigned by index — never tied to a specific branch code */
+  --branch-0: #2a78d6;
+  --branch-1: #1baf7a;
+  --branch-2: #4a3aa7;
+  --branch-3: #eb6834;
+  --branch-4: #e87ba4;
+  --branch-5: #eda100;
+  --branch-6: #008300;
+  --branch-7: #e34948;
 
   --good: #0ca30c;
   --warning: #b8790f;
@@ -30,11 +36,16 @@
   --gridline: #2c2c2a;
   --border: rgba(255, 255, 255, 0.1);
 
-  --branch-701: #3987e5;
-  --branch-706: #199e70;
-  --branch-707: #9085e9;
-  --branch-711: #d95926;
-  --branch-803: #d55181;
+  --accent: #3987e5;
+
+  --branch-0: #3987e5;
+  --branch-1: #199e70;
+  --branch-2: #9085e9;
+  --branch-3: #d95926;
+  --branch-4: #d55181;
+  --branch-5: #c98500;
+  --branch-6: #008300;
+  --branch-7: #e66767;
 
   --good: #0ca30c;
   --warning: #fab219;
@@ -62,7 +73,7 @@ body {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--branch-701) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 * {
@@ -108,4 +119,27 @@ body {
   background: linear-gradient(90deg, var(--gridline) 25%, color-mix(in srgb, var(--gridline) 50%, transparent) 37%, var(--gridline) 63%);
   background-size: 400% 100%;
   animation: shimmer 1.4s ease infinite;
+}
+
+.print-report {
+  display: none;
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-report,
+  .print-report * {
+    visibility: visible;
+  }
+  .print-report {
+    display: block;
+    position: absolute;
+    inset: 0;
+    padding: 0;
+  }
+  @page {
+    margin: 14mm;
+    size: A4;
+  }
 }
