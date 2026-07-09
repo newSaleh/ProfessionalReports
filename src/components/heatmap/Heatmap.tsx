@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import type { AppData } from '../../hooks/useAppData';
-import { BRANCH_CODES, type BranchCode } from '../../lib/types';
+import type { BranchCode } from '../../lib/types';
 import { Card } from '../common/Card';
 import { computeModelStat, branchName } from '../../lib/analytics';
 import { seqColor, seqTextColor } from '../../lib/color';
 import { useIsDarkMode } from '../../hooks/useIsDarkMode';
 import { fmtNum, fmtPct } from '../../lib/format';
-import { IconSearch } from '../common/Icons';
+import { IconAlert, IconSearch } from '../common/Icons';
 import clsx from 'clsx';
 
 type Metric = 'sellThrough' | 'sold' | 'balance';
@@ -17,16 +17,17 @@ const METRICS: { id: Metric; label: string }[] = [
   { id: 'balance', label: 'الرصيد الحالي' },
 ];
 
-const LIMITS = [20, 40, 80, 154];
+const LIMITS = [20, 40, 80, 500];
 
 export function Heatmap({ data }: { data: AppData }) {
   const rows = data.selectedSnapshot?.rows ?? [];
+  const branches = data.selectedSnapshot?.branches ?? [];
   const dark = useIsDarkMode();
   const [metric, setMetric] = useState<Metric>('sellThrough');
   const [limit, setLimit] = useState(40);
   const [search, setSearch] = useState('');
 
-  const enriched = useMemo(() => rows.map((r) => ({ row: r, stat: computeModelStat(r) })), [rows]);
+  const enriched = useMemo(() => rows.map((r) => ({ row: r, stat: computeModelStat(r, branches) })), [rows, branches]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -36,7 +37,8 @@ export function Heatmap({ data }: { data: AppData }) {
         ({ row }) =>
           row.ModelCode.toLowerCase().includes(q) ||
           row.StockGroupName.toLowerCase().includes(q) ||
-          row.SupplierName.toLowerCase().includes(q),
+          row.SupplierName.toLowerCase().includes(q) ||
+          row.SupplierCode.toLowerCase().includes(q),
       );
     }
     return [...list].sort((a, b) => b.stat.totalSoldPositive - a.stat.totalSoldPositive).slice(0, limit);
@@ -46,13 +48,13 @@ export function Heatmap({ data }: { data: AppData }) {
     if (metric === 'sellThrough') return 1;
     let max = 1;
     for (const { stat } of enriched) {
-      for (const b of BRANCH_CODES) {
+      for (const b of branches) {
         const v = metric === 'sold' ? stat.branch[b].sold : stat.branch[b].balance;
         if (v > max) max = v;
       }
     }
     return max;
-  }, [enriched, metric]);
+  }, [enriched, branches, metric]);
 
   const cellValue = (stat: ReturnType<typeof computeModelStat>, b: BranchCode) => {
     if (metric === 'sellThrough') return stat.branch[b].sellThrough;
@@ -69,7 +71,7 @@ export function Heatmap({ data }: { data: AppData }) {
           خريطة الفروع الحرارية
         </h2>
         <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-          قارن أداء كل موديل عبر الفروع الخمسة بنظرة واحدة لاكتشاف فجوات التوزيع
+          قارن أداء كل موديل عبر الفروع بنظرة واحدة لاكتشاف فجوات التوريد
         </p>
       </div>
 
@@ -104,7 +106,7 @@ export function Heatmap({ data }: { data: AppData }) {
               className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
               style={limit === l ? { background: 'var(--surface-1)', color: 'var(--text-primary)' } : { color: 'var(--text-secondary)' }}
             >
-              {l === 154 ? 'الكل' : `أعلى ${l}`}
+              {l === 500 ? 'الكل' : `أعلى ${l}`}
             </button>
           ))}
         </div>
@@ -118,7 +120,7 @@ export function Heatmap({ data }: { data: AppData }) {
                 <th className="sticky right-0 z-10 px-2 py-2 text-start text-xs font-bold" style={{ background: 'var(--surface-1)', color: 'var(--muted)' }}>
                   الموديل
                 </th>
-                {BRANCH_CODES.map((b) => (
+                {branches.map((b) => (
                   <th key={b} className="px-2 py-2 font-bold whitespace-nowrap" style={{ color: 'var(--muted)' }}>
                     {branchName(b, data.branchNames)}
                   </th>
@@ -134,7 +136,21 @@ export function Heatmap({ data }: { data: AppData }) {
                   >
                     {row.ModelCode}
                   </td>
-                  {BRANCH_CODES.map((b) => {
+                  {branches.map((b) => {
+                    const bs = stat.branch[b];
+                    if (metric === 'balance' && bs.balanceError) {
+                      return (
+                        <td key={b} className="p-0">
+                          <div
+                            className="rounded-lg h-9 flex items-center justify-center gap-1 font-bold tabular-nums"
+                            style={{ background: 'color-mix(in srgb, var(--critical) 18%, transparent)', color: 'var(--critical)' }}
+                            title={`${branchName(b, data.branchNames)} — رصيد خاطئ (${bs.rawBalance})`}
+                          >
+                            <IconAlert className="w-3 h-3" /> {fmtNum(bs.rawBalance)}
+                          </div>
+                        </td>
+                      );
+                    }
                     const v = cellValue(stat, b);
                     const t = metric === 'sellThrough' ? v : v / globalMax;
                     const empty = v === 0;
@@ -165,14 +181,19 @@ export function Heatmap({ data }: { data: AppData }) {
         )}
       </Card>
 
-      <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
-        <span>أقل</span>
-        <div className="flex h-3 rounded-full overflow-hidden w-40">
-          {[0, 0.16, 0.33, 0.5, 0.66, 0.83, 1].map((t) => (
-            <div key={t} className="flex-1" style={{ background: seqColor(t, dark) }} />
-          ))}
+      <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--muted)' }}>
+        <div className="flex items-center gap-2">
+          <span>أقل</span>
+          <div className="flex h-3 rounded-full overflow-hidden w-40">
+            {[0, 0.16, 0.33, 0.5, 0.66, 0.83, 1].map((t) => (
+              <div key={t} className="flex-1" style={{ background: seqColor(t, dark) }} />
+            ))}
+          </div>
+          <span>أعلى</span>
         </div>
-        <span>أعلى</span>
+        <span className="inline-flex items-center gap-1.5" style={{ color: 'var(--critical)' }}>
+          <IconAlert className="w-3.5 h-3.5" /> رصيد خاطئ (سالب)
+        </span>
       </div>
     </div>
   );

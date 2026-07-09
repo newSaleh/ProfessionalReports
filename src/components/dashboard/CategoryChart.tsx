@@ -28,7 +28,7 @@ export function CategoryChart({ rows, limit = 7 }: { rows: ModelRow[]; limit?: n
           orientation="right"
         />
         <Tooltip
-          cursor={{ fill: 'color-mix(in srgb, var(--branch-701) 6%, transparent)' }}
+          cursor={{ fill: 'color-mix(in srgb, var(--accent) 6%, transparent)' }}
           content={({ active, payload }) => {
             if (!active || !payload || payload.length === 0) return null;
             const p = payload[0];
@@ -45,7 +45,7 @@ export function CategoryChart({ rows, limit = 7 }: { rows: ModelRow[]; limit?: n
             );
           }}
         />
-        <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={20} fill="var(--branch-701)" />
+        <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={20} fill="var(--accent)" />
       </BarChart>
     </ResponsiveContainer>
   );
