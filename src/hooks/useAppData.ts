@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BalanceAnomaly, BranchCode, Recommendation, Snapshot, ThresholdSettings } from '../lib/types';
 import { DEFAULT_THRESHOLDS } from '../lib/types';
-import { SEED_SNAPSHOT } from '../data/seed';
 import { dateFromFilename, parseTopModelsFile } from '../lib/excel';
 import {
   deleteSnapshot,
@@ -30,17 +29,22 @@ export function useAppData() {
   useEffect(() => {
     (async () => {
       let existing = await listSnapshots();
-      if (existing.length === 0) {
-        await saveSnapshot(SEED_SNAPSHOT);
-        existing = [SEED_SNAPSHOT];
+
+      // No demo data, ever: nothing loads automatically. Also sweep away any leftover
+      // seed snapshot from earlier versions of this app that auto-loaded one.
+      const stale = existing.filter((s) => s.source === 'seed');
+      if (stale.length > 0) {
+        await Promise.all(stale.map((s) => deleteSnapshot(s.id)));
+        existing = existing.filter((s) => s.source !== 'seed');
       }
+
       const [names, thr, statuses] = await Promise.all([
         loadBranchSettings(),
         loadThresholds(),
         loadRecommendationStatuses(),
       ]);
       setSnapshots(existing);
-      setSelectedSnapshotId(existing[existing.length - 1]!.id);
+      setSelectedSnapshotId(existing.length > 0 ? existing[existing.length - 1]!.id : null);
       setBranchNamesState(names.names);
       setThresholdsState(thr);
       setRecStatuses(statuses);
@@ -111,6 +115,14 @@ export function useAppData() {
     [],
   );
 
+  /** Wipes every stored snapshot from this browser in one go. */
+  const clearAllData = useCallback(async () => {
+    await Promise.all(snapshots.map((s) => deleteSnapshot(s.id)));
+    setSnapshots([]);
+    setSelectedSnapshotId(null);
+    setBanner('تم حذف كل البيانات المحفوظة من هذا المتصفح.');
+  }, [snapshots]);
+
   const setBranchNames = useCallback(async (names: Partial<Record<BranchCode, string>>) => {
     setBranchNamesState(names);
     await saveBranchSettings({ names });
@@ -160,6 +172,7 @@ export function useAppData() {
     setSelectedSnapshotId,
     addSnapshotFromFile,
     removeSnapshot,
+    clearAllData,
     branchNames,
     setBranchNames,
     allBranchCodes,
