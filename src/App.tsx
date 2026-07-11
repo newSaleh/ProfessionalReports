@@ -11,6 +11,7 @@ import { Explorer } from './components/explorer/Explorer';
 import { Trends } from './components/trends/Trends';
 import { Heatmap } from './components/heatmap/Heatmap';
 import { DataPanel } from './components/upload/DataPanel';
+import { WelcomeScreen } from './components/upload/WelcomeScreen';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import { PrintReport } from './components/report/PrintReport';
 import { exportFullReportExcel } from './lib/exportWorkbook';
@@ -59,6 +60,10 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (data.snapshots.length === 0) {
+    return <WelcomeScreen data={data} />;
   }
 
   return (

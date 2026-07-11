@@ -3,12 +3,14 @@ import type { AppData } from '../../hooks/useAppData';
 import { Card, CardHeader } from '../common/Card';
 import { defaultBranchName, DEFAULT_THRESHOLDS } from '../../lib/types';
 import { branchColor } from '../common/BranchTag';
-import { IconCheck } from '../common/Icons';
+import { IconCheck, IconTrash } from '../common/Icons';
+import { fmtNum } from '../../lib/format';
 
 export function SettingsPanel({ data }: { data: AppData }) {
   const [names, setNames] = useState(data.branchNames);
   const [thresholds, setThresholds] = useState(data.thresholds);
   const [saved, setSaved] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const save = () => {
     void data.setBranchNames(names);
@@ -127,6 +129,43 @@ export function SettingsPanel({ data }: { data: AppData }) {
           </span>
         )}
       </div>
+
+      <Card style={{ borderColor: 'color-mix(in srgb, var(--critical) 35%, transparent)' }}>
+        <CardHeader
+          title="منطقة الخطر"
+          subtitle={`حذف كل اللقطات المحفوظة (${fmtNum(data.snapshots.length)}) من هذا المتصفح نهائيًا — لا يوجد تراجع`}
+        />
+        {confirmClear ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                void data.clearAllData();
+                setConfirmClear(false);
+              }}
+              className="text-sm font-bold rounded-xl px-4 py-2 text-white"
+              style={{ background: 'var(--critical)' }}
+            >
+              تأكيد حذف كل البيانات
+            </button>
+            <button
+              onClick={() => setConfirmClear(false)}
+              className="text-sm font-bold rounded-xl px-4 py-2 border"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            >
+              إلغاء
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmClear(true)}
+            disabled={data.snapshots.length === 0}
+            className="flex items-center gap-2 text-sm font-bold rounded-xl px-4 py-2 border disabled:opacity-40"
+            style={{ borderColor: 'color-mix(in srgb, var(--critical) 40%, transparent)', color: 'var(--critical)' }}
+          >
+            <IconTrash className="w-4 h-4" /> حذف كل البيانات الآن
+          </button>
+        )}
+      </Card>
     </div>
   );
 }

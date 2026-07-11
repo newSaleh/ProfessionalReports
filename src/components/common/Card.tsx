@@ -1,14 +1,16 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import clsx from 'clsx';
 
 export function Card({
   children,
   className,
   padded = true,
+  style,
 }: {
   children: ReactNode;
   className?: string;
   padded?: boolean;
+  style?: CSSProperties;
 }) {
   return (
     <div
@@ -17,7 +19,7 @@ export function Card({
         padded && 'p-5',
         className,
       )}
-      style={{ background: 'var(--surface-1)', borderColor: 'var(--border)' }}
+      style={{ background: 'var(--surface-1)', borderColor: 'var(--border)', ...style }}
     >
       {children}
     </div>
